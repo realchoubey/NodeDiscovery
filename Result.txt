@@ -1,0 +1,60 @@
+1. Sample output from a node with given topology with D not with E
+	A : ['B', 'C', 'D']
+	B : ['A', 'C', 'E']
+	C : ['A', 'B']
+	D : ['A']
+	E : ['B', 'C', 'F']
+	F : ['E', 'G']
+	G : ['F']
+	Total time take for discovery from machine B: 5.15 seconds
+
+
+2. If some node is not up:
+	A : ['127.0.0.1:1237', 'B', 'C']
+	B : ['A', 'C', 'E']
+	C : ['A', 'B']
+	E : ['B', 'C', 'F']
+	F : ['E', 'G']
+	G : ['F']
+	Total time take for discovery from machine B: 5.04 seconds
+
+3. Sample topology:
+	A : ['B', 'C', 'D']
+	B : ['A', 'C', 'E']
+	C : ['A', 'B']
+	D : ['A', 'E']
+	E : ['B', 'C', 'D', 'F']
+	F : ['E', 'G']
+	G : ['F']
+	Total time take for discovery from machine A: 5.22 seconds
+
+4. When all nodes are not up:
+	A : ['127.0.0.1:1237', 'B', 'C']
+	B : ['127.0.0.1:1238', 'A', 'C']
+	C : ['A', 'B']
+	Total time take for discovery from machine C: 4.19 seconds
+
+5. Adding one by one:
+	A : ['B', 'C', 'D']
+	B : ['127.0.0.1:1238', 'A', 'C']
+	C : ['A', 'B']
+	D : ['127.0.0.1:1238', 'A']
+	Total time take for discovery from machine D: 4.48 seconds
+
+	Seems server is not up, waiting for 5 secs...
+	A : ['B', 'C', 'D']
+	B : ['A', 'C', 'E']
+	C : ['A', 'B']
+	D : ['A', 'E']
+	E : ['127.0.0.1:1239', 'B', 'C', 'D']
+	Total time take for discovery from machine E: 4.04 seconds
+
+6. Last node up:
+	A : ['B', 'C', 'D']
+	B : ['A', 'C', 'E']
+	C : ['A', 'B']
+	D : ['A', 'E']
+	E : ['B', 'C', 'D', 'F']
+	F : ['E', 'G']
+	G : ['F']
+	Total time take for discovery from machine G: 0.2 seconds
