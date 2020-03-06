@@ -14,7 +14,9 @@ default_port=12345
 
 class networkNodesInfo():
 	def __init__(self, start_time, configuration_file="configuration"):
+		self.all_node_discovered = False
 		self.start_time = start_time
+		self.extra_time = 0
 
 		# Dict of neighbor host ip key:value pair.
 		self.network_map = {}
@@ -55,22 +57,26 @@ class networkNodesInfo():
 		return pickle.dumps(all_node_udpate)
 
 	def populate_details(self, configuration_file):
-		with open(configuration_file) as conf_file:
-			# Get Machine name
-			self.machine_name = conf_file.readline().split('\n')[0]
+		try:
+			with open(configuration_file) as conf_file:
+				# Get Machine name
+				self.machine_name = conf_file.readline().split('\n')[0]
 
-			# Get Machine IP and port number
-			machine_ip_info = conf_file.readline().split('\n')[0]
-			self.machine_ip = machine_ip_info
-			self.port = int(machine_ip_info.split(':')[1])
-			if not self.port:
-				self.port = default_port
+				# Get Machine IP and port number
+				machine_ip_info = conf_file.readline().split('\n')[0]
+				self.machine_ip = machine_ip_info
+				self.port = int(machine_ip_info.split(':')[1])
+				if not self.port:
+					self.port = default_port
 
-			# Get neighbor details
-			neighbor_details = conf_file.readline().split('\n')[0]
+				# Get neighbor details
+				neighbor_details = conf_file.readline().split('\n')[0]
 
-		# TODO confirm input are correct from file.
-		self.populate_neighbor(neighbor_details)
+			# TODO confirm input are correct from file.
+			self.populate_neighbor(neighbor_details)
+		except Exception as e:
+			print("Exception {} occurred".format(e))
+			raise e
 
 	def populate_neighbor(self, neighbor_details):
 		neighbor_ip_port_list = neighbor_details.split(',')
@@ -95,57 +101,76 @@ class networkNodesInfo():
 					self.network_map[self.machine_ip].append(neighbor_ip)
 
 	def print_network_node_mapping(self):
+		name_list_all = []
+		all_discovered = True
 		for localhost_ip, neighbor_ip_list in sorted(self.network_map.items()):
 			name_list = []
 			for ip in neighbor_ip_list:
 				if ip in self.ip_host_map:
 					name_list.append(self.ip_host_map[ip])
 				else:
+					all_discovered = False
 					name_list.append(ip)
 
-			print("{0} : {1}".format(
-				  self.ip_host_map[localhost_ip], sorted(name_list)))
+			name_list_all.append(name_list)
 
-		time_taken_for_discovery = round(time.time() - self.start_time, 2)
-		print("Total time take for discovery from machine {}: {} seconds"
-			  .format(self.machine_name, time_taken_for_discovery))
+		self.all_node_discovered = all_discovered
+
+		if self.all_node_discovered:
+			idx = 0
+			for localhost_ip, neighbor_ip_list in sorted(self.network_map.items()):
+				print("{0} : {1}".format(
+					  self.ip_host_map[localhost_ip], sorted(name_list_all[idx])))
+				idx += 1
+
+			time_taken_for_discovery = round(time.time() - self.start_time, 2)
+			print("Total time take for discovery from machine {}: {} seconds"
+				  .format(self.machine_name, time_taken_for_discovery - self.extra_time))
 
 	def update_all_machine_details(self, incoming_data):
-		ip_host_map = incoming_data[0]
-		updated_network_map = incoming_data[1]
+		current_time = time.time()
 
-		# Update name of machine.
-		for ip, name in ip_host_map.items():
-			if ip not in self.ip_host_map:
-				self.ip_host_map[ip] = name
+		if not self.all_node_discovered:
+			ip_host_map = incoming_data[0]
+			updated_network_map = incoming_data[1]
 
-		# Update network node info.
-		for localhost_ip, neighbor_ip_list in updated_network_map.items():
-			if localhost_ip in self.network_map:
-				for neighbor in neighbor_ip_list:
-					if neighbor not in self.network_map[localhost_ip]:
-						self.network_map[localhost_ip].append(neighbor)
-			else:
-				self.network_map[localhost_ip] = neighbor_ip_list
+			# Update name of machine.
+			for ip, name in ip_host_map.items():
+				if ip not in self.ip_host_map:
+					self.ip_host_map[ip] = name
 
-		self.print_network_node_mapping()
+			# Update network node info.
+			for localhost_ip, neighbor_ip_list in updated_network_map.items():
+				if localhost_ip in self.network_map:
+					for neighbor in neighbor_ip_list:
+						if neighbor not in self.network_map[localhost_ip]:
+							self.network_map[localhost_ip].append(neighbor)
+				else:
+					self.network_map[localhost_ip] = neighbor_ip_list
+
+			self.print_network_node_mapping()
+
+		self.extra_time += round(time.time() - current_time, 2)
 
 
 	def compare_incoming_current_data(self, incoming_data):
+		current_time = time.time()
+
 		ip_host_map = incoming_data[0]
 		updated_network_map = incoming_data[1]
 
-
 		if collections.Counter(updated_network_map) == collections.Counter(self.network_map) \
 		  and collections.Counter(ip_host_map) == collections.Counter(self.ip_host_map):
+		  	self.extra_time += round(time.time() - current_time, 2)
 			return False
 
+		self.extra_time += round(time.time() - current_time, 2)
 		return True
 
 
 class clientConnection():
 	def __init__(self, networkNodesInfo_obj, host_ip, port):
-		timeout = 50
+		timeout = 300
 		connection_established = False
 		while timeout:
 			try:
@@ -156,16 +181,16 @@ class clientConnection():
 				timeout = 0
 			except socket.error as e:
 				if e.errno == 61:
-					print("Seems server is not up, waiting for 5 secs...")
-					time.sleep(5)
+					# print("Seems server is not up, waiting for 5 secs...")
+					# time.sleep(5)
 					self.socket_conn.close()
 					timeout -=5
 				else:
-					print("Socket error at : {}".format(e))
+					# print("Socket error at : {}".format(e))
 					timeout = 0
 
 			except Exception as e:
-				print("Generic exception occurred: {}".format(e))
+				# print("Generic exception occurred: {}".format(e))
 				timeout = 0
 
 		try:
@@ -209,6 +234,7 @@ class serverConnection():
 			# Receive data from neighbor and check if you get any
 			# updated data. If there is any update send it to
 			# other neighbors.
+			# TODO Read in stream so that we can have more data reads.
 			incoming_data = self.current_neighbor_conn.recv(5120)
 			data_object = pickle.loads(incoming_data)
 
@@ -220,7 +246,7 @@ class serverConnection():
 				# Update and close.
 				self.update_neighbor()
 
-			self.current_neighbor_conn.close()
+			# self.current_neighbor_conn.close()
 
 	def update_neighbor(self):
 		neighbors_list = self.networkNodesInfo_obj.get_neighbor_list()
@@ -248,9 +274,12 @@ if __name__ == '__main__':
 		if opt in ("-c", "--config"):
 			config_file = arg
 		elif opt in ("-p", "--port"):
-			default_port = int(arg)
+			default_port = arg
 
-	networkNodesInfo_obj = networkNodesInfo(start_time, config_file)
+	try:
+		networkNodesInfo_obj = networkNodesInfo(start_time, config_file)
+	except Exception as e:
+		sys.exit(0)
 
 	# Start server thread.
 	socket_conn = serverConnection(networkNodesInfo_obj,
